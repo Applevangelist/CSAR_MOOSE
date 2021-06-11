@@ -37,7 +37,7 @@
 -- @field #CSAR
 CSAR = {
   ClassName       = "CSAR",
-  verbose         =     1,
+  verbose         =     2,
   lid             =   "",
   coalition       = 1,
   coalitiontxt    = "blue",
@@ -92,7 +92,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b5"
+CSAR.version="0.0.1b6"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -175,6 +175,7 @@ function CSAR:New(Coalition, Template, Alias)
   self.hoverStatus = {} -- tracks status of a helis hover above a downed pilot
   self.inTransitGroups = {} -- contain a table for each SAR with all units he has with the original names
   self.landedStatus = {}
+  self.lastCrash = {}
   self.takenOff = {}
   self.smokeMarkers = {} -- tracks smoke markers for groups
   self.UsedVHFFrequencies = {}
@@ -197,7 +198,7 @@ function CSAR:New(Coalition, Template, Alias)
   self.radioSound = "beacon.ogg" -- the name of the sound file to use for the Pilot radio beacons. If this isnt added to the mission BEACONS WONT WORK!
   self.allowFARPRescue = true --allows pilot to be rescued by landing at a FARP or Airbase
   self.max_units = 6 --number of pilots that can be carried
-  self.useprefix = false  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
+  self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
   self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true
   self.template = Template or "generic" -- template for downed pilot
   self.mashprefix = {"MASH"} -- prefixes used to find MASHes
@@ -302,6 +303,25 @@ function CSAR:_PilotsOnboard(_heliName)
   return count
 end
 
+--- Function to check for dupe eject events.
+-- @param #CSAR self
+-- @param #string _unitname Name of unit.
+-- @return #boolean Outcome
+function CSAR:_DoubleEjection(_unitname)
+
+    if self.lastCrash[_unitname] then
+        local _time = csar.lastCrash[_unitname]
+
+        if timer.getTime() - _time < 10 then
+            env.info("Caught double ejection!")
+            return true
+        end
+    end
+
+    self.lastCrash[_unitname] = timer.getTime()
+    return false
+end
+
 --- Function to spawn a CSAR object into the scene.
 -- @param #CSAR self
 -- @param #number _coalition Coalition
@@ -329,6 +349,7 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
     :InitDelayOff()
     :OnSpawnGroup(
       function(group,immortalcrew,invisiblecrew)
+          BASE:I(string.format("CSAR Spawn specialoptions: Immortal %s, Invisible %s",tostring(immortalcrew),tostring(invisiblecrew)))
           if immortalcrew then
           local _setImmortal = {
               id = 'SetImmortal',
@@ -440,7 +461,7 @@ function CSAR:_EventHandler(EventData)
     end
       
     if _event.IniGroupName then
-        self.takenOff[_event.IniGroupName] = true
+        self.takenOff[_event.IniUnitName] = true
     end
     
     return true
@@ -463,7 +484,7 @@ function CSAR:_EventHandler(EventData)
         if _heliName == _event.IniPlayerName then
             -- add back the status script
             for _woundedName, _groupInfo in pairs(self.woundedGroups) do  
-                if _groupInfo.side == _event.initiator:getCoalition() then   
+                if _groupInfo.side == _event.IniCoalition then   
                     self:_CheckWoundedGroupStatus(_heliName,_woundedName)
                 end
             end
@@ -478,6 +499,7 @@ function CSAR:_EventHandler(EventData)
       self:I(self.lid .. " Event unit - Pilot Dead")
   
       local _unit = _event.IniUnit
+      local _unitname = _event.IniUnitName
       local _group = _event.IniGroup
       
       if _unit == nil then
@@ -490,7 +512,10 @@ function CSAR:_EventHandler(EventData)
       end
   
       -- Catch multiple events here?
-      if self.takenOff[_event.IniGroupName] == true or _group:IsAirborne() then
+      if self.takenOff[_event.IniUnitName] == true or _group:IsAirborne() then
+          if self:_DoubleEjection(_unitname) then
+            return
+          end
           
           local m = MESSAGE:New("MAYDAY MAYDAY! " .. _unit:GetTypeName() .. " shot down. No Chute!",10,"Info"):ToCoalition(self.coalition)
           -- self:_HandleEjectOrCrash(_unit, true)
@@ -507,6 +532,7 @@ function CSAR:_EventHandler(EventData)
       self:I(self.lid .. " Event unit - Pilot Ejected")
   
       local _unit = _event.IniUnit
+      local _unitname = _event.IniUnitName
       local _group = _event.IniGroup
       
       if _unit == nil then
@@ -522,11 +548,15 @@ function CSAR:_EventHandler(EventData)
           return
       end
 
-      if not self.takenOff[_event.IniGroupName] and not _group:IsAirborne() then
+      if not self.takenOff[_event.IniUnitName] and not _group:IsAirborne() then
           self:I(self.lid .. " Pilot has not taken off, ignore")
           return -- give up, pilot hasnt taken off
       end
       
+      if self:_DoubleEjection(_unitname) then
+        return
+      end
+          
       local _freq = self:_GenerateADFFrequency()
        self:_AddCsar(_coalition, _unit:GetCountry(), _unit:GetCoordinate()  , _unit:GetTypeName(),  _unit:GetName(), _event.IniPlayerName, _freq, false, 0)
        
@@ -535,13 +565,14 @@ function CSAR:_EventHandler(EventData)
   elseif _event.id == EVENTS.Land then
       self:I(self.lid .. " Landing")
       
-      if _event.initiator:getName() then
-          self.takenOff[_event.initiator:getName()] = nil
+      if _event.IniUnitName then
+          self.takenOff[_event.IniUnitName] = nil
       end
   
       if self.allowFARPRescue then
           
-          local _unit = _event.initiator
+          local _unit = _event.IniUnit  -- Wrapper.Unit#UNIT
+          --local _unit = _event.initiator
   
           if _unit == nil then
               self:I(self.lid .. " Unit nil on landing")
@@ -553,19 +584,19 @@ function CSAR:_EventHandler(EventData)
               return --ignore!
           end
           
-          self.takenOff[_event.initiator:getName()] = nil
+          self.takenOff[_event.IniUnitName] = nil
  
-          local _place = _event.place
+          local _place = _event.Place -- Wrapper.Airbase#AIRBASE
   
           if _place == nil then
               self:I(self.lid .. " Landing Place Nil")
               return -- error!
           end
    
-          if _place:getCoalition() == self.coalition or _place:getCoalition() == coalition.side.NEUTRAL then
+          if _place:GetCoalition() == self.coalition or _place:GetCoalition() == coalition.side.NEUTRAL then
               self:_RescuePilots(_unit)  
           else
-              self:I(string.format("Airfield %d, Unit %d", _place:getCoalition(), _unit:getCoalition()))
+              self:I(string.format("Airfield %d, Unit %d", _place:GetCoalition(), _unit:GetCoalition()))
               end
           end
   
@@ -738,8 +769,8 @@ function CSAR:_CheckCloseWoundedGroup(_distance, _heliUnit, _heliName, _woundedG
   local _woundedLeader = _woundedGroup:GetUnit(1) -- Wrapper.Unit#UNIT
   local _lookupKeyHeli = _heliUnit:GetName() .. "_" .. _woundedLeader:GetID() --lookup key for message state tracking
   
-  -- local _pilotName = self.woundedGroups[_woundedGroupName].desc
-  local _pilotName = _woundedGroup:GetName()
+  local _pilotName = self.woundedGroups[_woundedGroupName].desc
+  --local _pilotName = _woundedGroup:GetName()
   
   local _reset = true
   
@@ -1537,5 +1568,4 @@ _SETTINGS:SetA2A_BULLS()
 _SETTINGS:SetImperial()
 
 local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
-BlueCsar.useprefix = true
 BlueCsar:__Start(5)
