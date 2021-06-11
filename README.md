@@ -1,4 +1,4 @@
-# CSAR_MOOSE
+# CSAR_MOOSE (BETA Testing)
 Refactoring Ciribob's excellent CSAR script into Moose as object-oriented FSM
 
 ## Testing
