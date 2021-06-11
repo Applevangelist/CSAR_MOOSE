@@ -92,7 +92,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b4"
+CSAR.version="0.0.1b5"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -197,7 +197,7 @@ function CSAR:New(Coalition, Template, Alias)
   self.radioSound = "beacon.ogg" -- the name of the sound file to use for the Pilot radio beacons. If this isnt added to the mission BEACONS WONT WORK!
   self.allowFARPRescue = true --allows pilot to be rescued by landing at a FARP or Airbase
   self.max_units = 6 --number of pilots that can be carried
-  self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
+  self.useprefix = false  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
   self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true
   self.template = Template or "generic" -- template for downed pilot
   self.mashprefix = {"MASH"} -- prefixes used to find MASHes
@@ -315,6 +315,7 @@ end
 -- @param #string _description Description
 function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _playerName, _freq, noMessage, _description )
   self:I(self.lid .. " _AddCsar")
+  self:I({_coalition , _country, _point, _typeName, _unitName, _playerName, _freq, noMessage, _description})
   -- local _spawnedGroup = self:_SpawnGroup( _coalition, _country, _point, _typeName )
   local template = self.template
   local alias = string.format("Downed Pilot #%d",math.random(1,10000))
@@ -1419,7 +1420,7 @@ function CSAR:onafterStatus(From, Event, To)
   end
   
   local PilotsInField = 0
-  for _, _unitName in pairs(self.csarUnits) do
+  for _, _unitName in pairs(self.woundedGroups) do
     PilotsInField = PilotsInField + 1
   end
   
@@ -1529,7 +1530,12 @@ end
 -- You need a late activated infantry group ("Downed Pilot" below) to stand in for the actual pilot. 
 -- Setup is currently in lines 186ff of this file, or you can use `myCSAR.<setting> = <value> after instantiating the object.
 -- Test mission setup on GH
+-- 
+_SETTINGS:SetPlayerMenuOff()
+_SETTINGS:SetA2G_BR()
+_SETTINGS:SetA2A_BULLS()
+_SETTINGS:SetImperial()
 
 local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
+BlueCsar.useprefix = true
 BlueCsar:__Start(5)
-
