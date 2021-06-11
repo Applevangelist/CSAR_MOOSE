@@ -39,7 +39,7 @@ CSAR = {
   ClassName       = "CSAR",
   verbose         =     0,
   lid             =   "",
-  version         = "0.1.b2",
+  version         = "0.1.b4",
   coalition       = 1,
   coalitiontxt    = "blue",
   FreeVHFFrequencies = {},
@@ -49,7 +49,6 @@ CSAR = {
   woundedGroups = {},
   landedStatus = {},
   addedTo = {},
-  downedPilotCounterBlue = 0,
   woundedGroups = {}, -- contains the new group of units
   inTransitGroups = {}, -- contain a table for each SAR with all units he has with the original names
   smokeMarkers = {}, -- tracks smoke markers for groups
@@ -63,6 +62,7 @@ CSAR = {
   csarPrefix = { "helicargo", "MEDEVAC"},
   template = nil,
   bluemash = {},
+  smokecolor = 4,
 }
 
 --- Known beacons from the available maps
@@ -165,71 +165,42 @@ function CSAR:New(Coalition, Template, Alias)
   self:AddTransition("*",             "Rescued",            "*")          -- Pilot at MASH.
   self:AddTransition("*",             "Stop",               "Stopped")     -- Stop FSM.
 
-  -- tables
+  -- tables, mainly for tracking actions
   self.addedTo = {}
   self.allheligroupset = {} -- GROUP_SET of all helis
   self.csarUnits = {} -- table of CSAR unit names
-  --self.currentlyDisabled = {} --stored disabled aircraft
   self.FreeVHFFrequencies = {}
   self.heliVisibleMessage = {} -- tracks if the first message has been sent of the heli being visible
   self.heliCloseMessage = {} -- tracks heli close message  ie heli < 500m distance
   self.hoverStatus = {} -- tracks status of a helis hover above a downed pilot
   self.inTransitGroups = {} -- contain a table for each SAR with all units he has with the original names
   self.landedStatus = {}
-  --self.pilotDisabled = {} -- tracks what aircraft a pilot is disabled for
-  --self.pilotLives = {} -- tracks how many lives a pilot has
-  --self.radioBeacons = {} -- all current beacons  
   self.takenOff = {}
   self.smokeMarkers = {} -- tracks smoke markers for groups
   self.UsedVHFFrequencies = {}
   self.woundedGroups = {} -- contains the new group of units
 
   -- settings, counters etc
-  -- self.csarMode = 0 -- NOT supported here
-
-  --      0 - No Limit - NO Aircraft disabling
-  --      1 - Disable Aircraft when its down - Timeout to reenable aircraft
-  --      2 - Disable Aircraft for Pilot when he's shot down -- timeout to reenable pilot for aircraft
-  --      3 - Pilot Life Limit - No Aircraft Disabling -- timeout to reset lives?
-  
-  -- self.maxLives = 8 -- Maximum pilot lives 
-  -- self.countCSARCrash = false -- If you set to true, pilot lives count for CSAR and CSAR aircraft will count.
   self.csarOncrash = true -- If set to true, will generate a csar when a plane crashes as well.
   self.allowDownedPilotCAcontrol = false -- Set to false if you don't want to allow control by Combined arms.
-  --self.reenableIfCSARCrashes = true -- If a CSAR heli crashes, the pilots are counted as rescued anyway. Set to false to Stop this
-  -- self.disableAircraftTimeout = true -- Allow aircraft to be used after 20 minutes if the pilot isnt rescued
-  -- self.disableTimeoutTime = 20 -- Time in minutes for TIMEOUT  
-  -- self.destructionHeight = 150 -- height in meters an aircraft will be destroyed at if the aircraft is disabled
   self.enableForAI = true -- set to false to disable AI units from being rescued.
-  -- managed per coalition setting
-  -- self.enableForRED = false -- enable for red side 
-  -- self.enableForBLUE = true -- enable for blue side 
-  -- self.enableSlotBlocking = false -- if set to true, you need to put the csarSlotBlockGameGUI.lua
-  self.bluesmokecolor = 4 -- Color of smokemarker for blue side, 0 is green, 1 is red, 2 is white, 3 is orange and 4 is blue
-  -- self.redsmokecolor = 1 -- Color of smokemarker for red side, 0 is green, 1 is red, 2 is white, 3 is orange and 4 is blue 
-  self.requestdelay = 5 -- Time in seconds before the survivors will request Medevac 
+  self.smokecolor = 4 -- Color of smokemarker for blue side, 0 is green, 1 is red, 2 is white, 3 is orange and 4 is blue
   self.coordtype = 1 -- Use Lat/Long DDM (0), Lat/Long DMS (1), MGRS (2), Bullseye imperial (3) or Bullseye metric (4) for coordinates.
-  -- self.coordaccuracy = 5 -- Precision of the reported coordinates, see MIST-docs at http://wiki.hoggit.us/view/GetMGRSString
-  -- only applies to _non_ bullseye coords
   self.immortalcrew = true -- Set to true to make wounded crew immortal
   self.invisiblecrew = false -- Set to true to make wounded crew insvisible 
-  self.messageTime = 30 -- Time to show the intial wounded message for in seconds 
-  --self.weight = 100 -- pilot weight in kg
+  self.messageTime = 30 -- Time to show longer messages for in seconds 
   self.pilotRuntoExtractPoint = true -- Downed Pilot will run to the rescue helicopter up to self.extractDistance METERS 
   self.loadDistance = 75 -- configure distance for pilot to get in helicopter in meters.
   self.extractDistance = 500 -- Distance the Downed pilot will run to the rescue helicopter
   self.loadtimemax = 135 -- seconds
   self.radioSound = "beacon.ogg" -- the name of the sound file to use for the Pilot radio beacons. If this isnt added to the mission BEACONS WONT WORK!
   self.allowFARPRescue = true --allows pilot to be rescued by landing at a FARP or Airbase
-  -- manage centrally
-  -- self.downedPilotCounterRed = 0
-  self.downedPilotCounterBlue = 0
   self.max_units = 6 --number of pilots that can be carried
   self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
-  self.csarPrefix = { "helicargo", "MEDEVAC"}
-  self.template = Template or "generic"
-  self.mashprefix = "MASH"
-  self.bluemash = SET_GROUP:New():FilterCoalitions(self.coalition):FilterPrefixes(self.mashprefix):FilterOnce()
+  self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true
+  self.template = Template or "generic" -- template for downed pilot
+  self.mashprefix = {"MASH"} -- prefixes used to find MASHes
+  self.bluemash = SET_GROUP:New():FilterCoalitions(self.coalition):FilterPrefixes(self.mashprefix):FilterOnce() -- currently only GROUP objects, maybe support STATICs also?
   
   ------------------------
   --- Pseudo Functions ---
@@ -282,9 +253,8 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
     :InitAIOnOff(self.allowDownedPilotCAcontrol)
     :InitDelayOff()
     :OnSpawnGroup(
-      function(group)
+      function(group,immortalcrew,invisiblecrew)
           if immortalcrew then
-        -- Immortal code for alexej21
           local _setImmortal = {
               id = 'SetImmortal',
               params = {
@@ -310,8 +280,6 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
     )
     :SpawnFromCoordinate(_point)
   
-  --self:_AddSpecialParametersToGroup(_spawnedGroup)
-  
   if not noMessage then
     local m = MESSAGE:New("MAYDAY MAYDAY! " .. _typeName .. " is down. ",10,"INFO"):ToCoalition(self.coalition)
   end
@@ -323,8 +291,6 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
   if _freq then
     self:_AddBeaconToGroup(_spawnedGroup, _freq)
   end
-  
-  -- self:_HandleEjectOrCrash(_playerName, false)
   
   -- Generate DESCRIPTION text
   local _text = " "
@@ -649,7 +615,7 @@ function CSAR:_PopSmokeForGroup(_woundedGroupName, _woundedLeader)
   local _lastSmoke = self.smokeMarkers[_woundedGroupName]
   if _lastSmoke == nil or timer.getTime() > _lastSmoke then
   
-      local _smokecolor = self.bluesmokecolor
+      local _smokecolor = self.smokecolor
       local _smokecoord = _woundedLeader:GetCoordinate()
       _smokecoord:Smoke(_smokecolor)
       self.smokeMarkers[_woundedGroupName] = timer.getTime() + 300 -- next smoke time
@@ -702,14 +668,6 @@ function CSAR:_PickupUnit(_heliUnit, _pilotName, _woundedGroup, _woundedGroupNam
   
   self:__Boarded(5,_heliName,_woundedGroupName)
   
-  --[[
-  timer.scheduleFunction(self._ScheduledSARFlight,
-      {
-          heliName = _heliName,
-          groupName = _woundedGroupName
-      },
-      timer.getTime() + 1)
-  --]]
   return true
 end
 
@@ -745,8 +703,6 @@ function CSAR:_CheckCloseWoundedGroup(_distance, _heliUnit, _heliName, _woundedG
   
   -- local _pilotName = self.woundedGroups[_woundedGroupName].desc
   local _pilotName = _woundedGroup:GetName()
-  
-  --local _woundedCount = 1 -- never used?
   
   local _reset = true
   
@@ -898,20 +854,6 @@ function CSAR:_ScheduledSARFlight(heliname,groupname)
 
         if (_heliUnit == nil) then
             --helicopter crashed?
-            -- Put intransit pilots back
-            --TODO possibly respawn the guys
-            --[[
-            if self.reenableIfCSARCrashes then
-                local _rescuedGroups = self.inTransitGroups[heliname]
-
-                if _rescuedGroups ~= nil then
-                    -- enable pilots again
-                    for _, _rescueGroup in pairs(_rescuedGroups) do
-                        --self.enableAircraft(_rescueGroup.originalUnit, _rescuedGroups.player)
-                    end
-                end
-            end
-            --]]
             self.inTransitGroups[heliname] = nil
             return
         end
@@ -921,14 +863,9 @@ function CSAR:_ScheduledSARFlight(heliname,groupname)
             return
         end
 
-
         local _dist = self:_GetClosestMASH(_heliUnit)
 
         if _dist == -1 then
-            -- Can now rescue to FARP
-            -- Mash Dead
-            --  csar.inTransitGroups[_heliUnit:getName()][_woundedGroupName] = nil
-            --  csar.displayMessageToSAR(_heliUnit, string.format("%s: NO MASH! The pilot died of despair!", _heliUnit:getName()), 10)
             return
         end
 
@@ -937,17 +874,8 @@ function CSAR:_ScheduledSARFlight(heliname,groupname)
             return
         end
 
-        -- end
         --queue up
         self:__Returning(-5,heliname,_woundedGroupName)
-        --[[
-        timer.scheduleFunction(self._ScheduledSARFlight,
-            {
-                heliName = _heliUnit:getName(),
-                groupName = _woundedGroupName
-            },
-            timer.getTime() + 5)
-            --]]
 end
 
 --- Mark pilot as rescued and remove from tables.
@@ -966,13 +894,6 @@ function CSAR:_RescuePilots(_heliUnit)
   self.inTransitGroups[_heliName] = nil
   
   local _txt = string.format("%s: The pilots have been taken to the\nmedical clinic. Good job!", _heliName)
-  
-  --[[ enable pilots again
-  for _, _rescueGroup in pairs(_rescuedGroups) do
-  
-      self.enableAircraft(_rescueGroup.originalUnit, _rescueGroup.player)
-  end
-  --]]
   
   self:_DisplayMessageToSAR(_heliUnit, _txt, 10)
   -- trigger event
@@ -1179,7 +1100,7 @@ function CSAR:_Reqsmoke( _unitName )
       local _msg = string.format("%s - %.2f KHz ADF - %.3fM - Popping Blue smoke at your %s ", _closest.groupInfo.desc, _closest.groupInfo.frequency / 1000, _closest.distance, _clockDir)
       self:_DisplayMessageToSAR(_heli, _msg, 20)
       local _coord = _closest.pilot:GetCoordinate()
-      local color = self.bluesmokecolor
+      local color = self.smokecolor
       _coord:Smoke(color)
   else
       self:_DisplayMessageToSAR(_heli, "No Pilots within 8KM", 20)
@@ -1201,7 +1122,7 @@ function CSAR:_GetClosestMASH(_heli)
   for _, _mashUnit in pairs(_mashes) do
       if _mashUnit and _mashUnit:IsAlive() then
           local _mashcoord = _mashUnit:GetCoordinate()
-          _distance = self:_GetDistance(_helicoord, _mashcord)
+          _distance = self:_GetDistance(_helicoord, _mashcoord)
           if _distance ~= nil and (_shortestDistance == -1 or _distance < _shortestDistance) then
             _shortestDistance = _distance
           end
@@ -1467,7 +1388,6 @@ function CSAR:onbeforeStatus(From, Event, To)
   self:I({From, Event, To})
   -- housekeeping
   self:_AddMedevacMenuItem()
-  --self:_CheckWoundedGroupStatus()
   return self
 end
 
@@ -1519,3 +1439,4 @@ end
 
 local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
 BlueCsar:__Start(5)
+
