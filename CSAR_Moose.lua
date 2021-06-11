@@ -39,7 +39,7 @@ CSAR = {
   ClassName       = "CSAR",
   verbose         =     0,
   lid             =   "",
-  version         = "0.1.b1",
+  version         = "0.1.b2",
   coalition       = 1,
   coalitiontxt    = "blue",
   FreeVHFFrequencies = {},
@@ -391,7 +391,13 @@ function CSAR:_EventHandler(EventData)
   
   -- take off
   elseif _event.id == EVENTS.Takeoff then -- taken off
-  
+    self:I(self.lid .. " Event unit - Takeoff")
+      
+    local _coalition = _event.IniCoalition
+    if _coalition ~= self.coalition then
+        return --ignore!
+    end
+      
     if _event.IniGroupName then
         self.takenOff[_event.IniGroupName] = true
     end
@@ -399,34 +405,29 @@ function CSAR:_EventHandler(EventData)
     return true
   
   -- player enter unit
-  elseif _event.id == EVENTS.PlayerEnterAircraft then --player entered unit
-  
+  elseif _event.id == EVENTS.PlayerEnterAircraft or _event.id == EVENTS.PlayerEnterUnit then --player entered unit
+    self:I(self.lid .. " Event unit - Player Enter")
+    
+    local _coalition = _event.IniCoalition
+    if _coalition ~= self.coalition then
+        return --ignore!
+    end
+    
     if _event.IniPlayerName then
         self.takenOff[_event.IniPlayerName] = nil
     end
-  
-  -- if its a sar heli, re-add check status script
-    for _, _heliName in pairs(self.csarUnits) do
     
+  -- if its a sar heli, re-add check status script
+    for _, _heliName in pairs(self.csarUnits) do    
         if _heliName == _event.IniPlayerName then
             -- add back the status script
-            for _woundedName, _groupInfo in pairs(self.woundedGroups) do
-    
-                if _groupInfo.side == _event.initiator:getCoalition() then
-    
-                      self:_CheckWoundedGroupStatus(_heliName,_woundedName)
+            for _woundedName, _groupInfo in pairs(self.woundedGroups) do  
+                if _groupInfo.side == _event.initiator:getCoalition() then   
+                    self:_CheckWoundedGroupStatus(_heliName,_woundedName)
                 end
             end
         end
     end
-  
-    -- guess this is for slot blocking?
-    --[[
-    if _event.initiator:getName() and _event.initiator:getPlayerName() then
-        self:I(self.lid .. " Checking Unit - " .. _event.initiator:getName())
-        self:checkDisabledAircraftStatus({ _event.initiator:getName(), _event.initiator:getPlayerName() })
-    end
-    --]]
     
     return true
   
@@ -443,19 +444,12 @@ function CSAR:_EventHandler(EventData)
       end
   
       local _coalition = _event.IniCoalition
-  
       if _coalition ~= self.coalition then
           return --ignore!
       end
   
       -- Catch multiple events here?
       if self.takenOff[_event.IniGroupName] == true or _group:IsAirborne() then
-          
-          --[[
-          if self:_DoubleEjection(_unit) then
-              return
-          end
-          --]]
           
           local m = MESSAGE:New("MAYDAY MAYDAY! " .. _unit:GetTypeName() .. " shot down. No Chute!",10,"Info"):ToCoalition(self.coalition)
           -- self:_HandleEjectOrCrash(_unit, true)
@@ -478,14 +472,11 @@ function CSAR:_EventHandler(EventData)
           return -- error!
       end
   
-      local _coalition = _unit:GetCoalition()
-  
+      local _coalition = _unit:GetCoalition() 
       if _coalition ~= self.coalition then
           return --ignore!
       end
-  
-      -- TODO catch ejection on runway?
-  
+   
       if self.enableForAI == false and _event.IniPlayerName == nil then
           return
       end
@@ -495,37 +486,34 @@ function CSAR:_EventHandler(EventData)
           return -- give up, pilot hasnt taken off
       end
       
-      --[[
-      if self:_DoubleEjection(_unit) then
-          return
-      end
-      --]]
-  
-  
       local _freq = self:_GenerateADFFrequency()
        self:_AddCsar(_coalition, _unit:GetCountry(), _unit:GetCoordinate()  , _unit:GetTypeName(),  _unit:GetName(), _event.IniPlayerName, _freq, false, 0)
        
       return true
   
   elseif _event.id == EVENTS.Land then
-  
+      self:I(self.lid .. " Landing")
+      
       if _event.initiator:getName() then
           self.takenOff[_event.initiator:getName()] = nil
       end
   
       if self.allowFARPRescue then
-  
-          --self:I(self.lid .. " Landing")
-  
+          
           local _unit = _event.initiator
   
           if _unit == nil then
               self:I(self.lid .. " Unit nil on landing")
               return -- error!
           end
-  
+          
+          local _coalition = _event.IniCoalition
+          if _coalition ~= self.coalition then
+              return --ignore!
+          end
+          
           self.takenOff[_event.initiator:getName()] = nil
-  
+ 
           local _place = _event.place
   
           if _place == nil then
@@ -1495,6 +1483,7 @@ function CSAR:onafterStop(From, Event, To)
   self:UnHandleEvent(EVENTS.Takeoff)
   self:UnHandleEvent(EVENTS.Land)
   self:UnHandleEvent(EVENTS.Ejection)
+  self:UnHandleEvent(EVENTS.PlayerEnterUnit)
   self:UnHandleEvent(EVENTS.PlayerEnterAircraft)
   self:UnHandleEvent(EVENTS.Dead)
   self:I(self.lid .. "Stopped.")
@@ -1530,4 +1519,3 @@ end
 
 local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
 BlueCsar:__Start(5)
-
