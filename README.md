@@ -10,4 +10,6 @@ Refactoring Ciribob's excellent CSAR script into Moose as object-oriented FSM
 * Watch the dcs.log with Notepad++ or the like for errors.
 
       local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
+      BlueCsar.csarOncrash = true
       BlueCsar:__Start(5)
+     
