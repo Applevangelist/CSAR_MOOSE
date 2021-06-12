@@ -428,6 +428,7 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
   
   if not _freq then
     _freq = self:_GenerateADFFrequency()
+    if not _freq then _freq = "333.25" end --noob catch
   end 
   
   if _freq then
@@ -1158,10 +1159,10 @@ function CSAR:_SignalFlare(_unitName)
   
       local _clockDir = self:_GetClockDirection(_heli, _closest.pilot)
   
-      local _msg = string.format("%s - %.2f KHz ADF - %.3fM - Popping Signal Flare at your %s ", _closest.groupInfo.desc, _closest.groupInfo.frequency / 1000, _closest.distance, _clockDir)
+      local _msg = string.format("%s - %.2f KHz ADF - %.3fM - Popping Signal Flare at your %s o\'clock", _closest.groupInfo.desc, _closest.groupInfo.frequency / 1000, _closest.distance, _clockDir)
       self:_DisplayMessageToSAR(_heli, _msg, 20)
       
-      local _coord = _heli:GetCoordinate()
+      local _coord = _closest.pilot:GetCoordinate()
       _coord:FlareRed(_clockDir)
   else
       self:_DisplayMessageToSAR(_heli, "No Pilots within 8KM", 20)
@@ -1197,7 +1198,7 @@ function CSAR:_Reqsmoke( _unitName )
   local _closest = self:_GetClosestDownedPilot(_heli)
   if _closest ~= nil and _closest.pilot ~= nil and _closest.distance < 8000.0 then
       local _clockDir = self:_GetClockDirection(_heli, _closest.pilot)
-      local _msg = string.format("%s - %.2f KHz ADF - %.3fM - Popping Blue smoke at your %s ", _closest.groupInfo.desc, _closest.groupInfo.frequency / 1000, _closest.distance, _clockDir)
+      local _msg = string.format("%s - %.2f KHz ADF - %.3fM - Popping Blue smoke at your %s o\'clock", _closest.groupInfo.desc, _closest.groupInfo.frequency / 1000, _closest.distance, _clockDir)
       self:_DisplayMessageToSAR(_heli, _msg, 20)
       local _coord = _closest.pilot:GetCoordinate()
       local color = self.smokecolor
@@ -1405,11 +1406,22 @@ end
 -- @return #number direction
 function CSAR:_GetClockDirection(_heli, _group)
   self:I(self.lid .. " _GetClockDirection")
-  local _position = _group:GetCoordinate() -- get position of pilot
+ 
   local _playerPosition = _heli:GetCoordinate() -- get position of helicopter
-  local DirectionVec3 = _position:GetDirectionVec3( _playerPosition ) -- direction from pilot to heli
-  local AngleRadians =  _playerPosition:GetAngleRadians(DirectionVec3) -- angle in radians
-  return AngleRadians
+  local _targetpostions = _group:GetCoordinate() -- get position of downed pilot
+  local _heading = _playerPosition:GetHeading() -- heading
+  local DirectionVec3 = _playerPosition:GetDirectionVec3( _targetpostions )
+  local Angle = _playerPosition:GetAngleDegrees( DirectionVec3 )
+  self:I(self.lid .. " _GetClockDirection"..tostring(Angle))
+  local clock = 0   
+  if _heading then
+    local Aspect = Angle - _heading
+    if Aspect == 0 then Aspect = 360 end
+    --clock = math.abs(math.floor(Aspect / 30))
+    clock = Aspect / 30
+    clock = UTILS.Round(clock,-2)
+  end    
+  return clock
 end
 
 --- Function to add beacon to downed pilot.
