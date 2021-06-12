@@ -37,7 +37,7 @@
 -- @field #CSAR
 CSAR = {
   ClassName       = "CSAR",
-  verbose         =     1,
+  verbose         =     2,
   lid             =   "",
   coalition       = 1,
   coalitiontxt    = "blue",
@@ -359,7 +359,7 @@ function CSAR:_DoubleEjection(_unitname)
         local _time = self.lastCrash[_unitname]
 
         if timer.getTime() - _time < 10 then
-            BASE:I("Caught double ejection!")
+            self:I("Caught double ejection!")
             return true
         end
     end
@@ -1408,7 +1408,7 @@ function CSAR:_GetClockDirection(_heli, _group)
   local _position = _group:GetCoordinate() -- get position of pilot
   local _playerPosition = _heli:GetCoordinate() -- get position of helicopter
   local DirectionVec3 = _position:GetDirectionVec3( _playerPosition ) -- direction from pilot to heli
-  local AngleRadians =  self:GetAngleRadians(DirectionVec3) -- angle in radians
+  local AngleRadians =  _playerPosition:GetAngleRadians(DirectionVec3) -- angle in radians
   return AngleRadians
 end
 
