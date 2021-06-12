@@ -37,7 +37,7 @@
 -- @field #CSAR
 CSAR = {
   ClassName       = "CSAR",
-  verbose         =     2,
+  verbose         =     1,
   lid             =   "",
   coalition       = 1,
   coalitiontxt    = "blue",
@@ -65,6 +65,17 @@ CSAR = {
   rescues = 0,
 }
 
+--- Downed pilots info.
+-- @type CSAR.DownedPilot
+-- @field #number index Pilot index.
+-- @field #string name Name of the spawned group.
+-- @field #number side Coalition.
+-- @field #string originalUnit Name of the original unit.
+-- @field #string desc Description.
+-- @field #string typename Typename of Unit.
+-- @field #number frequency Frequency of the NDB.
+-- @field #string player Player name if applicable.
+  
 --- Known beacons from the available maps
 -- @field #CSAR.SkipFrequencies
 CSAR.SkipFrequencies = {
@@ -92,7 +103,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b6"
+CSAR.version="0.0.1b8"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -149,7 +160,7 @@ function CSAR:New(Coalition, Template, Alias)
   end
   
   -- Set some string id for output to DCS.log file.
-  self.lid=string.format("CSAR %s (%s) | ", self.alias, self.coalition and UTILS.GetCoalitionName(self.coalition) or "unknown")
+  self.lid=string.format("%s (%s) | ", self.alias, self.coalition and UTILS.GetCoalitionName(self.coalition) or "unknown")
   
   -- Start State.
   self:SetStartState("Stopped")
@@ -180,7 +191,9 @@ function CSAR:New(Coalition, Template, Alias)
   self.smokeMarkers = {} -- tracks smoke markers for groups
   self.UsedVHFFrequencies = {}
   self.woundedGroups = {} -- contains the new group of units
-
+  self.downedPilots = {} -- Replacement woundedGroups
+  self.downedpilotcounter = 1
+  
   -- settings, counters etc
   self.rescues = 0 -- counter for successful rescue landings at FARP/AFB/MASH
   self.csarOncrash = true -- If set to true, will generate a csar when a plane crashes as well.
@@ -288,6 +301,39 @@ end
 --- Helper Functions ---
 ------------------------
 
+--- Function to insert downed pilot tracker object.
+-- @param #CSAR self
+-- @param #string Groupname Name of the spawned group.
+-- @param #number Side Coalition.
+-- @param #string OriginalUnit Name of original Unit.
+-- @param #string Description Descriptive text.
+-- @param #string Typename Typename of unit.
+-- @param #number Frequency Frequency of the NDB in Hz
+-- @param #string Playername Name of Player (if applicable)
+-- @return #CSAR.DownedPilot The tracking structure table.
+function CSAR:_CreateDownedPilotTrack(Groupname,Side,OriginalUnit,Description,Typename,Frequency,Playername)
+  self:I({"_CreateDownedPilotTrack",Groupname,Side,OriginalUnit,Description,Typename,Frequency,Playername})
+  
+  -- create new entry
+  local DownedPilot = {} -- #CSAR.DownedPilot
+  DownedPilot.desc = Description or ""
+  DownedPilot.frequency = Frequency or 0
+  DownedPilot.index = self.downedpilotcounter
+  DownedPilot.name = Groupname or ""
+  DownedPilot.originalUnit = OriginalUnit or ""
+  DownedPilot.player = Playername or ""
+  DownedPilot.side = Side or 0
+  DownedPilot.typename = Typename or ""
+  
+  -- Add Pilot
+  table.insert(self.downedPilots,DownedPilot)
+  
+  -- Increase counter
+  self.downedpilotcounter = self.downedpilotcounter+1
+  
+  return DownedPilot
+end
+
 --- Count pilots on board.
 -- @param #CSAR self
 -- @param #string _heliName
@@ -310,10 +356,10 @@ end
 function CSAR:_DoubleEjection(_unitname)
 
     if self.lastCrash[_unitname] then
-        local _time = csar.lastCrash[_unitname]
+        local _time = self.lastCrash[_unitname]
 
         if timer.getTime() - _time < 10 then
-            env.info("Caught double ejection!")
+            BASE:I("Caught double ejection!")
             return true
         end
     end
@@ -338,7 +384,7 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
   self:I({_coalition , _country, _point, _typeName, _unitName, _playerName, _freq, noMessage, _description})
   -- local _spawnedGroup = self:_SpawnGroup( _coalition, _country, _point, _typeName )
   local template = self.template
-  local alias = string.format("Downed Pilot #%d",math.random(1,10000))
+  local alias = string.format("Downed Pilot-%d",math.random(1,10000))
   local immortalcrew = self.immortalcrew
   local invisiblecrew = self.invisiblecrew
   local _spawnedGroup = SPAWN
@@ -398,8 +444,10 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
       _text = _description
   end
   
+  local downedpilottrack = self:_CreateDownedPilotTrack(_spawnedGroup:GetName(),_coalition,_unitName,_text,_typeName,_freq,_playerName)
+  
   self.woundedGroups[_spawnedGroup:GetName()] = { side = _coalition, originalUnit = _unitName, desc = _text, typename = _typeName, frequency = _freq, player = _playerName }
- 
+  
   self:_InitSARForPilot(_spawnedGroup, _freq, noMessage)
   
 end
@@ -439,6 +487,7 @@ function CSAR:_SpawnCsarAtZone( _zone, _coalition, _description, _randomPoint)
   self:_AddCsar(_coalition, _country, pos, nil, nil, nil, freq, true, _description)
 end
 
+-- TODO: Split in functions per Event type
 --- Event handler.
 -- @param #CSAR self
 function CSAR:_EventHandler(EventData)
@@ -1413,6 +1462,7 @@ function CSAR:onafterStart(From, Event, To)
   self:HandleEvent(EVENTS.Land, self._EventHandler)
   self:HandleEvent(EVENTS.Ejection, self._EventHandler)
   self:HandleEvent(EVENTS.PlayerEnterAircraft, self._EventHandler)
+  self:HandleEvent(EVENTS.PlayerEnterUnit, self._EventHandler)
   self:HandleEvent(EVENTS.Dead, self._EventHandler)
   self:_GenerateVHFrequencies()
   if self.useprefix then
@@ -1464,7 +1514,7 @@ function CSAR:onafterStatus(From, Event, To)
     local text = string.format("%s | Active SAR: %d | Downed Pilots in field: %d | Pilots boarded: %d | Rescue (landings): %d",self.lid,NumberOfSARPilots,PilotsInField,PilotsBoarded,self.rescues)
     self:I(text)
     if self.verbose > 1 then
-      local m = MESSAGE:New(text,"10","CSAR"):ToAll()
+      local m = MESSAGE:New(text,"10","Status"):ToAll()
     end
   end
   self:__Status(-20)
@@ -1569,3 +1619,4 @@ _SETTINGS:SetImperial()
 
 local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
 BlueCsar:__Start(5)
+
