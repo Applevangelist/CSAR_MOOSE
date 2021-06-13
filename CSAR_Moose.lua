@@ -105,7 +105,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b10"
+CSAR.version="0.0.1b11"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -346,7 +346,7 @@ end
 -- @param #string _heliName
 -- @return #number count  
 function CSAR:_PilotsOnboard(_heliName)
-  self:I(self.lid .. " _PilotsOnboard")
+  self:T(self.lid .. " _PilotsOnboard")
  local count = 0
   if self.inTransitGroups[_heliName] then
       for _, _group in pairs(self.inTransitGroups[_heliName]) do
@@ -366,7 +366,7 @@ function CSAR:_DoubleEjection(_unitname)
         local _time = self.lastCrash[_unitname]
 
         if timer.getTime() - _time < 10 then
-            self:I("Caught double ejection!")
+            self:E(self.lid.."Caught double ejection!")
             return true
         end
     end
@@ -382,7 +382,7 @@ end
 -- @return Wrapper.Group#GROUP group The #GROUP object.
 -- @return #string alias The alias name.
 function CSAR:_SpawnPilotInField(country,point)
-  self:I({country,point})
+  self:T({country,point})
   local template = self.template
   local alias = string.format("Downed Pilot-%d",math.random(1,10000))
   local coalition = self.coalition
@@ -404,7 +404,7 @@ end
 -- @param Wrapper.Group#GROUP group Group to use.
 function CSAR:_AddSpecialOptions(group)
   self:I(self.lid.." _AddSpecialOptions")
-  self:I({group})
+  self:T({group})
   
   local immortalcrew = self.immortalcrew
   local invisiblecrew = self.invisiblecrew
@@ -480,7 +480,7 @@ function CSAR:_AddCsar(_coalition , _country, _point, _typeName, _unitName, _pla
   end
   
   
-  self:I({_spawnedGroup, _alias})
+  self:T({_spawnedGroup, _alias})
   
   local _GroupName = _spawnedGroup:GetName() or _alias
   --local _GroupStructure = { side = _coalition, originalUnit = _unitName, desc = _text, typename = _typeName, frequency = _freq, player = _playerName }
@@ -533,7 +533,7 @@ end
 -- @param #CSAR self
 function CSAR:_EventHandler(EventData)
   self:I(self.lid .. " _EventHandler")
-  self:I({Event = EventData.id})
+  self:T({Event = EventData.id})
   
   local _event = EventData -- Core.Event#EVENTDATA
   
@@ -753,16 +753,19 @@ function CSAR:_RemoveNameFromDownedPilots(name)
   local found = false
   for _,_pilot in pairs(PilotTable) do
     if _pilot.name == name then
-    found = true
-    _pilot.desc = nil
-    _pilot.frequency = nil
-    _pilot.index = nil
-    _pilot.name = nil
-    _pilot.originalUnit = nil
-    _pilot.player = nil
-    _pilot.side = nil
-    _pilot.typename = nil
-    _pilot.group = nil
+    local group = _pilot.group -- Wrapper.Group#GROUP
+    if not group:IsAlive() then -- don't delete groups which still exist
+      found = true
+      _pilot.desc = nil
+      _pilot.frequency = nil
+      _pilot.index = nil
+      _pilot.name = nil
+      _pilot.originalUnit = nil
+      _pilot.player = nil
+      _pilot.side = nil
+      _pilot.typename = nil
+      _pilot.group = nil
+    end
     end
   end
   return found
@@ -779,12 +782,14 @@ function CSAR:_CheckWoundedGroupStatus(heliname,woundedgroupname)
   
   -- if wounded group is not here then message alread been sent to SARs
   -- stop processing any further
-  if not self:_CheckNameInDownedPilots(_woundedGroupName) then
+  local _found, _downedpilot = self:_CheckNameInDownedPilots(_woundedGroupName)
+  if not _found then
     return
   end
   
   --local _woundedGroup = self:_GetWoundedGroup(_woundedGroupName)
-  local _woundedGroup = GROUP:FindByName(_woundedGroupName) -- Wrapper.Group#GROUP
+  --local _woundedGroup = GROUP:FindByName(_woundedGroupName) -- Wrapper.Group#GROUP
+  local _woundedGroup = _downedpilot.group 
   local _heliUnit = self:_GetSARHeli(_heliName) -- Wrapper.Unit#UNIT
   
   local _woundedLeader = _woundedGroup:GetUnit(1) -- Wrapper.Unit#UNIT
@@ -819,7 +824,7 @@ end
 -- @param #string _woundedGroupName Name of the group.
 -- @param Wrapper.Group#GROUP _woundedLeader Object of the group.
 function CSAR:_PopSmokeForGroup(_woundedGroupName, _woundedLeader)
-  self:I(self.lid .. " _PopSmokeForGroup")
+  self:T(self.lid .. " _PopSmokeForGroup")
   -- have we popped smoke already in the last 5 mins
   local _lastSmoke = self.smokeMarkers[_woundedGroupName]
   if _lastSmoke == nil or timer.getTime() > _lastSmoke then
@@ -1114,7 +1119,7 @@ end
 -- @param #string _unitname Name of Unit
 -- @return #UNIT or nil
 function CSAR:_GetSARHeli(_unitName)
-  self:I(self.lid .. " _GetSARHeli")
+  self:T(self.lid .. " _GetSARHeli")
   local unit = UNIT:FindByName(_unitName)
   if unit and unit:IsAlive() then
     return unit
@@ -1130,7 +1135,7 @@ end
 -- @param #number _time
 -- @param #boolean _clear
 function CSAR:_DisplayMessageToSAR(_unit, _text, _time, _clear)
-  self:I(self.lid .. " _DisplayMessageToSAR")
+  self:T(self.lid .. " _DisplayMessageToSAR")
   local group = _unit:GetGroup()
   local _clear = _clear or nil
   local m = MESSAGE:New(_text,_time,"Info",_clear):ToGroup(group)
@@ -1141,7 +1146,7 @@ end
 -- @param Wrapper.Controllable#CONTROLLABLE _woundedGroup Group or Unit object.
 -- @return #string Coordinates as Text
 function CSAR:_GetPositionOfWounded(_woundedGroup)
-  self:I(self.lid .. " _GetPositionOfWounded")
+  self:T(self.lid .. " _GetPositionOfWounded")
   local _coordinate = _woundedGroup:GetCoordinate()
   local _coordinatesText = "None"
   if _coordinate then
@@ -1166,7 +1171,7 @@ end
 -- @param #CSAR self
 -- @param #string _unitName Unit to display to
 function CSAR:_DisplayActiveSAR(_unitName)
-  self:I(self.lid .. " _DisplayActiveSAR")
+  self:T(self.lid .. " _DisplayActiveSAR")
   local _msg = "Active MEDEVAC/SAR:"  
   local _heli = self:_GetSARHeli(_unitName) -- Wrapper.Unit#UNIT
   if _heli == nil then
@@ -1177,12 +1182,13 @@ function CSAR:_DisplayActiveSAR(_unitName)
   local _csarList = {}
   
   local _DownedPilotTable = self.downedPilots
-  self:I({Table=_DownedPilotTable})
+  self:T({Table=_DownedPilotTable})
   for _, _value in pairs(_DownedPilotTable) do
     local _groupName = _value.name
     self:I(string.format("Display Active Pilot: %s", tostring(_groupName)))
     self:I({Table=_value})
-    local _woundedGroup = GROUP:FindByName(_groupName)
+    --local _woundedGroup = GROUP:FindByName(_groupName)
+    local _woundedGroup = _value.group
     if _woundedGroup then  
         local _coordinatesText = self:_GetPositionOfWounded(_woundedGroup) 
         local _helicoord =  _heli:GetCoordinate()
@@ -1222,8 +1228,9 @@ function CSAR:_GetClosestDownedPilot(_heli)
   local DownedPilotsTable = self.downedPilots
   for _, _groupInfo in pairs(DownedPilotsTable) do
       local _woundedName = _groupInfo.name
-      local _tempWounded = GROUP:FindByName(_woundedName)
-
+      --local _tempWounded = GROUP:FindByName(_woundedName)
+      local _tempWounded = _groupInfo.group
+      
       -- check group exists and not moving to someone else
       if _tempWounded then
           local _tempCoord = _tempWounded:GetCoordinate()
@@ -1244,7 +1251,7 @@ end
 -- @param #CSAR self
 -- @param #string _unitName Name of the unit.
 function CSAR:_SignalFlare(_unitName)
-  self:I(self.lid .. " _SignalFlare")
+  self:T(self.lid .. " _SignalFlare")
   local _heli = self:_GetSARHeli(_unitName)
   if _heli == nil then
       return
@@ -1272,7 +1279,7 @@ end
 -- @param #number _side
 -- @param #string _ignore
 function CSAR:_DisplayToAllSAR(_message, _side, _ignore)
-  self:I(self.lid .. " _DisplayToAllSAR")
+  self:T(self.lid .. " _DisplayToAllSAR")
   for _, _unitName in pairs(self.csarUnits) do
     local _unit = self:_GetSARHeli(_unitName)
     if _unit then
@@ -1287,7 +1294,7 @@ end
 --@param #CSAR self
 --@param #string _unitName Name of the helicopter
 function CSAR:_Reqsmoke( _unitName )
-  self:I(self.lid .. " _Reqsmoke")
+  self:T(self.lid .. " _Reqsmoke")
   local _heli = self:_GetSARHeli(_unitName)
   if _heli == nil then
       return
@@ -1406,7 +1413,7 @@ end
 -- @param Core.Point#COORDINATE _point2 Coordinate two
 -- @return #number Distance in meters
 function CSAR:_GetDistance(_point1, _point2)
-  self:I(self.lid .. " _GetDistance")
+  self:T(self.lid .. " _GetDistance")
   local distance = _point1:DistanceFromPointVec2(_point2)
   return distance
 end
@@ -1414,7 +1421,7 @@ end
 --- Populate table with available beacon frequencies.
 -- @param #CSAR self
 function CSAR:_GenerateVHFrequencies()
-  self:I(self.lid .. " _GenerateVHFrequencies")
+  self:T(self.lid .. " _GenerateVHFrequencies")
   local _skipFrequencies = self.SkipFrequencies
       
   local FreeVHFFrequencies = {}
@@ -1486,7 +1493,7 @@ end
 -- @param #CSAR self
 -- @return #number frequency
 function CSAR:_GenerateADFFrequency()
-  self:I(self.lid .. " _GenerateADFFrequency")
+  self:T(self.lid .. " _GenerateADFFrequency")
   -- get a free freq for a beacon
   if #self.FreeVHFFrequencies <= 3 then
       self.FreeVHFFrequencies = self.UsedVHFFrequencies
@@ -1502,14 +1509,14 @@ end
 -- @param Wrapper.Group#GROUP _group The downed Group
 -- @return #number direction
 function CSAR:_GetClockDirection(_heli, _group)
-  self:I(self.lid .. " _GetClockDirection")
+  self:T(self.lid .. " _GetClockDirection")
  
   local _playerPosition = _heli:GetCoordinate() -- get position of helicopter
   local _targetpostions = _group:GetCoordinate() -- get position of downed pilot
   local _heading = _playerPosition:GetHeading() -- heading
   local DirectionVec3 = _playerPosition:GetDirectionVec3( _targetpostions )
   local Angle = _playerPosition:GetAngleDegrees( DirectionVec3 )
-  self:I(self.lid .. " _GetClockDirection"..tostring(Angle).." "..tostring(_heading))
+  self:T(self.lid .. " _GetClockDirection"..tostring(Angle).." "..tostring(_heading))
   local clock = 12   
   if _heading then
     local Aspect = Angle - _heading
@@ -1523,11 +1530,11 @@ end
 
 --- Function to add beacon to downed pilot.
 -- @param #CSAR self
--- @param #string _groupname Name of the group
+-- @param Wrapper.Group#GROUP _group Group #GROUP object.
 -- @param #number _freq Frequency to use
-function CSAR:_AddBeaconToGroup(_groupName, _freq)
+function CSAR:_AddBeaconToGroup(_group, _freq)
     self:I(self.lid .. " _AddBeaconToGroup")
-    local _group = GROUP:FindByName(_groupName)    
+    local _group = _group   
     if _group == nil then
         --return frequency to pool of available
         for _i, _current in ipairs(self.UsedVHFFrequencies) do
@@ -1543,15 +1550,23 @@ function CSAR:_AddBeaconToGroup(_groupName, _freq)
     local Frequency = _freq -- Freq in Hertz
     local Sound =  "l10n/DEFAULT/"..self.radioSound
     trigger.action.radioTransmission(Sound, _radioUnit:GetPositionVec3(), 0, false, Frequency, 1000) -- Beacon in MP only runs for exactly 30secs straight
-    timer.scheduleFunction(self._RefreshRadioBeacon, { _groupName, _freq }, timer.getTime() + 30)
+    --timer.scheduleFunction(self._RefreshRadioBeacons, { _group, _freq }, timer.getTime() + 30)
 end
 
---- Helper function to add beacon to downed pilot.
+--- Helper function to (re-)add beacon to downed pilot.
 -- @param #CSAR self
 -- @param #table _args Arguments
-function CSAR:_RefreshRadioBeacons(_args)
-    self:I(self.lid .. " _RefreshRadioBeacons")
-    self:_AddBeaconToGroup(_args[1], _args[2])
+function CSAR:_RefreshRadioBeacons()
+    self:T(self.lid .. " _RefreshRadioBeacons")
+    local PilotTable = self.downedPilots
+    for _,_pilot in pairs (PilotTable) do
+      local pilot = _pilot -- #CSAR.DownedPilot
+      local group = pilot.group
+      local frequency = pilot.frequency
+      if frequency and frequency > 0 then
+        self:_AddBeaconToGroup(group,frequency)
+      end
+    end
 end
 
   ------------------------------
@@ -1564,7 +1579,7 @@ end
 -- @param #string Event Event triggered.
 -- @param #string To To state.
 function CSAR:onafterStart(From, Event, To)
-  self:I({From, Event, To})
+  self:T({From, Event, To})
   self:I(self.lid .. "Started.")
   -- event handler
   self:HandleEvent(EVENTS.Takeoff, self._EventHandler)
@@ -1590,9 +1605,10 @@ end
 -- @param #string Event Event triggered.
 -- @param #string To To state.
 function CSAR:onbeforeStatus(From, Event, To)
-  self:I({From, Event, To})
+  self:T({From, Event, To})
   -- housekeeping
   self:_AddMedevacMenuItem()
+  self:_RefreshRadioBeacons()
   return self
 end
 
@@ -1608,12 +1624,12 @@ function CSAR:onafterStatus(From, Event, To)
   for _, _unitName in pairs(self.csarUnits) do
     NumberOfSARPilots = NumberOfSARPilots + 1
   end
-  
+  --[[
   local PilotsInField = 0
   for _, _unitName in pairs(self.woundedGroups) do
     PilotsInField = PilotsInField + 1
   end
-  
+  --]]
   local PilotsInFieldN = 0
   for _, _unitName in pairs(self.downedPilots) do
     PilotsInFieldN = PilotsInFieldN + 1
@@ -1625,7 +1641,7 @@ function CSAR:onafterStatus(From, Event, To)
   end
   
   if self.verbose > 0 then
-    local text = string.format("%s Active SAR: %d | Downed Pilots in field: %d(%d) | Pilots boarded: %d | Rescue (landings): %d",self.lid,NumberOfSARPilots,PilotsInFieldN,PilotsInField,PilotsBoarded,self.rescues)
+    local text = string.format("%s Active SAR: %d | Downed Pilots in field: %d | Pilots boarded: %d | Rescue (landings): %d",self.lid,NumberOfSARPilots,PilotsInFieldN,PilotsBoarded,self.rescues)
     self:I(text)
     if self.verbose > 1 then
       local m = MESSAGE:New(text,"10","Status"):ToAll()
@@ -1641,7 +1657,7 @@ end
 -- @param #string Event Event triggered.
 -- @param #string To To state.
 function CSAR:onafterStop(From, Event, To)
-  self:I({From, Event, To})
+  self:T({From, Event, To})
   -- event handler
   self:UnHandleEvent(EVENTS.Takeoff)
   self:UnHandleEvent(EVENTS.Land)
@@ -1649,7 +1665,7 @@ function CSAR:onafterStop(From, Event, To)
   self:UnHandleEvent(EVENTS.PlayerEnterUnit)
   self:UnHandleEvent(EVENTS.PlayerEnterAircraft)
   self:UnHandleEvent(EVENTS.Dead)
-  self:I(self.lid .. "Stopped.")
+  self:T(self.lid .. "Stopped.")
   return self
 end
 
@@ -1715,7 +1731,7 @@ end
 -- @param #string Leadername Name of the #UNIT of the downed pilot.
 -- @param #string CoordinatesText String of the position of the pilot. Format determined by self.coordtype.
 function CSAR:onbeforePilotDown(From, Event, To, Group, Frequency, Leadername, CoordinatesText)
-  self:I({From, Event, To, Group, Frequency, Leadername, CoordinatesText})
+  self:T({From, Event, To, Group, Frequency, Leadername, CoordinatesText})
   return self
 end
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1743,3 +1759,4 @@ end
 
 local maulwuerfe = TIMER:New(Spawn_CSAR,BlueCsar)
 maulwuerfe:Start(30)
+
