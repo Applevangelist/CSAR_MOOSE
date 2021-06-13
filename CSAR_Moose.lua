@@ -1574,7 +1574,7 @@ function CSAR:_GetClockDirection(_heli, _group)
  
   local _playerPosition = _heli:GetCoordinate() -- get position of helicopter
   local _targetpostions = _group:GetCoordinate() -- get position of downed pilot
-  local _heading = _playerPosition:GetHeading() -- heading
+  local _heading = _heli:GetHeading() -- heading
   local DirectionVec3 = _playerPosition:GetDirectionVec3( _targetpostions )
   local Angle = _playerPosition:GetAngleDegrees( DirectionVec3 )
   self:T(self.lid .. " _GetClockDirection"..tostring(Angle).." "..tostring(_heading))
