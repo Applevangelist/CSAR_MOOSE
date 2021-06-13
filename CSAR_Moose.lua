@@ -37,7 +37,7 @@
 -- @field #CSAR
 CSAR = {
   ClassName       = "CSAR",
-  verbose         =     2,
+  verbose         =     1,
   lid             =   "",
   coalition       = 1,
   coalitiontxt    = "blue",
@@ -106,7 +106,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b20"
+CSAR.version="0.0.1b22"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -658,7 +658,7 @@ function CSAR:_EventHandler(EventData)
       return true
   
   elseif _event.id == EVENTS.Land then
-      self:I(self.lid .. " Landing")
+      self:T(self.lid .. " Landing")
       
       if _event.IniUnitName then
           self.takenOff[_event.IniUnitName] = nil
@@ -670,7 +670,7 @@ function CSAR:_EventHandler(EventData)
           --local _unit = _event.initiator
   
           if _unit == nil then
-              self:I(self.lid .. " Unit nil on landing")
+              self:T(self.lid .. " Unit nil on landing")
               return -- error!
           end
           
@@ -684,14 +684,14 @@ function CSAR:_EventHandler(EventData)
           local _place = _event.Place -- Wrapper.Airbase#AIRBASE
   
           if _place == nil then
-              self:I(self.lid .. " Landing Place Nil")
+              self:T(self.lid .. " Landing Place Nil")
               return -- error!
           end
    
           if _place:GetCoalition() == self.coalition or _place:GetCoalition() == coalition.side.NEUTRAL then
               self:_RescuePilots(_unit)  
           else
-              self:I(string.format("Airfield %d, Unit %d", _place:GetCoalition(), _unit:GetCoalition()))
+              self:T(string.format("Airfield %d, Unit %d", _place:GetCoalition(), _unit:GetCoalition()))
               end
           end
   
@@ -859,7 +859,7 @@ end
 -- @param Wrapper.Group#GROUP _woundedGroup Object of the group.
 -- @param #string _woundedGroupName Name of the group.
 function CSAR:_PickupUnit(_heliUnit, _pilotName, _woundedGroup, _woundedGroupName)
-  self:I(self.lid .. " _PickupUnit")
+  self:T(self.lid .. " _PickupUnit")
   --local _woundedLeader = _woundedGroup:GetUnit(1)
   
   -- GET IN!
@@ -927,7 +927,7 @@ end
 -- @param #string _woundedGroupName
 -- @return #boolean Outcome
 function CSAR:_CheckCloseWoundedGroup(_distance, _heliUnit, _heliName, _woundedGroup, _woundedGroupName)
-  self:I(self.lid .. " _CheckCloseWoundedGroup")
+  self:T(self.lid .. " _CheckCloseWoundedGroup")
   --local _woundedLeader = _woundedGroup:GetUnit(1) -- Wrapper.Unit#UNIT
   local _woundedLeader = _woundedGroup
   local _lookupKeyHeli = _heliUnit:GetName() .. "_" .. _woundedGroupName --lookup key for message state tracking
@@ -1088,8 +1088,8 @@ end
 -- @param #string heliname Heli name
 -- @param #string groupname Group name
 function CSAR:_ScheduledSARFlight(heliname,groupname)
-  self:I(self.lid .. " _ScheduledSARFlight")
-  self:I({heliname,groupname})
+  self:T(self.lid .. " _ScheduledSARFlight")
+  self:T({heliname,groupname})
         local _heliUnit = self:_GetSARHeli(heliname)
         local _woundedGroupName = groupname
 
@@ -1123,7 +1123,7 @@ end
 -- @param #CSAR self
 -- @param Wrapper.Unit#UNIT _heliUnit
 function CSAR:_RescuePilots(_heliUnit)
-  self:I(self.lid .. " _RescuePilots")
+  self:T(self.lid .. " _RescuePilots")
   local _heliName = _heliUnit:GetName()
   local _rescuedGroups = self.inTransitGroups[_heliName]
   
@@ -1212,7 +1212,7 @@ function CSAR:_DisplayActiveSAR(_unitName)
   self:T({Table=_DownedPilotTable})
   for _, _value in pairs(_DownedPilotTable) do
     local _groupName = _value.name
-    self:I(string.format("Display Active Pilot: %s", tostring(_groupName)))
+    self:T(string.format("Display Active Pilot: %s", tostring(_groupName)))
     self:T({Table=_value})
     --local _woundedGroup = GROUP:FindByName(_groupName)
     local _woundedGroup = _value.group
@@ -1707,7 +1707,7 @@ function CSAR:onafterStatus(From, Event, To)
   --]]
   local PilotsInFieldN = 0
   for _, _unitName in pairs(self.downedPilots) do
-    self:I({_unitName})
+    self:T({_unitName})
     if _unitName.name ~= nil then
       PilotsInFieldN = PilotsInFieldN + 1
     end
@@ -1722,7 +1722,7 @@ function CSAR:onafterStatus(From, Event, To)
   
   if self.verbose > 0 then
     local text = string.format("%s Active SAR: %d | Downed Pilots in field: %d | Pilots boarded: %d | Rescue (landings): %d",self.lid,NumberOfSARPilots,PilotsInFieldN,PilotsBoarded,self.rescues)
-    self:I(text)
+    self:T(text)
     if self.verbose > 1 then
       local m = MESSAGE:New(text,"10","Status"):ToAll()
     end
