@@ -33,9 +33,14 @@ Refactoring Ciribob's excellent CSAR script into Moose as object-oriented FSM
         self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
         self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true
         self.template = Template or "generic" -- template for downed pilot
-        self.mashprefix = {"MASH"} -- prefixes used to find MASHes
+        self.mashprefix = {"MASH"} -- prefixes used to find MASHes (#GROUP Objects)
         self.autosmoke = false -- automatically smoke location when heli is near
         
 * Known Issues
 
-      * AI and OnCrash don't currently work
+      * Takes >1min to board > 1 pilot
+
+* To test
+
+      * Hover boarding
+      * Rescue on landing at/close to Airbase
