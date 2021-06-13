@@ -105,7 +105,7 @@ CSAR.aircraftType["Mi-24"] = 8
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b11"
+CSAR.version="0.0.1b13"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
@@ -214,10 +214,11 @@ function CSAR:New(Coalition, Template, Alias)
   self.allowFARPRescue = true --allows pilot to be rescued by landing at a FARP or Airbase
   self.max_units = 6 --number of pilots that can be carried
   self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below 
-  self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true
+  self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true - DON'T use # in names!
   self.template = Template or "generic" -- template for downed pilot
   self.mashprefix = {"MASH"} -- prefixes used to find MASHes
   self.bluemash = SET_GROUP:New():FilterCoalitions(self.coalition):FilterPrefixes(self.mashprefix):FilterOnce() -- currently only GROUP objects, maybe support STATICs also?
+  self.autosmoke = false -- automatically smoke location when heli is near
   
   ------------------------
   --- Pseudo Functions ---
@@ -386,12 +387,12 @@ function CSAR:_SpawnPilotInField(country,point)
   local template = self.template
   local alias = string.format("Downed Pilot-%d",math.random(1,10000))
   local coalition = self.coalition
-  local pilotcacontrol = self.allowDownedPilotCAcontrol
+  local pilotcacontrol = self.allowDownedPilotCAcontrol -- is this correct?
   local _spawnedGroup = SPAWN
     :NewWithAlias(template,alias)
     :InitCoalition(coalition)
     :InitCountry(country)
-    :InitAIOnOff(pilotcacontrol)
+    --:InitAIOnOff(pilotcacontrol)
     :InitDelayOff()
     :SpawnFromCoordinate(point)
   
@@ -766,7 +767,7 @@ function CSAR:_RemoveNameFromDownedPilots(name)
       _pilot.typename = nil
       _pilot.group = nil
     end
-    end
+   end
   end
   return found
 end
@@ -779,11 +780,12 @@ function CSAR:_CheckWoundedGroupStatus(heliname,woundedgroupname)
   self:I(self.lid .. " _CheckWoundedGroupStatus")
   local _heliName = heliname
   local _woundedGroupName = woundedgroupname
-  
+  self:I({Heli = _heliName, Downed  = _woundedGroupName})
   -- if wounded group is not here then message alread been sent to SARs
   -- stop processing any further
   local _found, _downedpilot = self:_CheckNameInDownedPilots(_woundedGroupName)
   if not _found then
+    self:I("...not found in list!")
     return
   end
   
@@ -799,10 +801,12 @@ function CSAR:_CheckWoundedGroupStatus(heliname,woundedgroupname)
     self.heliVisibleMessage[_lookupKeyHeli] = nil
     self.heliCloseMessage[_lookupKeyHeli] = nil
     self.landedStatus[_lookupKeyHeli] = nil
+    self:I("...helinunit nil!")
     return
   end
 
-  if self:_CheckGroupNotKIA(_woundedGroup, _woundedGroupName, _heliUnit, _heliName) then
+  --if self:_CheckGroupNotKIA(_woundedGroup, _woundedGroupName, _heliUnit, _heliName) then
+  if _woundedGroup:IsAlive() then
     local _heliCoord = _heliUnit:GetCoordinate()
     local _leaderCoord = _woundedLeader:GetCoordinate()
     local _distance = self:_GetDistance(_heliCoord,_leaderCoord)
@@ -816,6 +820,9 @@ function CSAR:_CheckWoundedGroupStatus(heliname,woundedgroupname)
       --reschedule as units aren't dead yet , schedule for a bit slower though as we're far away
       self:__Approach(-10,heliname,woundedgroupname)
     end
+  else
+  self:I("...Downed Pilot KIA?!")
+  self:_RemoveNameFromDownedPilots(_downedpilot.name)
   end
 end
 
@@ -895,8 +902,9 @@ end
 function CSAR:_OrderGroupToMoveToPoint(_leader, _destination)
   self:I(self.lid .. " _OrderGroupToMoveToPoint")
   local group = _leader
-  local coordinate = _destination
-  group:RouteGroundTo(_destination,5,"Vee",5)
+  local coordinate = _destination:GetVec2()
+  --group:RouteGroundTo(_destination,5,"Vee",5)
+  group:RouteToVec2(coordinate,2)
 end
 
 --- Function to check if heli is close to group.
@@ -1373,18 +1381,21 @@ function CSAR:_AddMedevacMenuItem()
   local allheligroupset = self.allheligroupset
   local _allHeliGroups = allheligroupset:GetSetObjects()
 
-  -- update units table
+  -- rebuild units table
+  local _UnitList = {}
   for _key, _group in pairs (_allHeliGroups) do  
     local _unit = _group:GetUnit(1) -- Asume that there is only one unit in the flight for players
     if _unit then 
       if _unit:IsAlive() then         
         local unitName = _unit:GetName()
-          if not self.csarUnits[unitName] then
-            self.csarUnits[unitName] = unitName
-          end
+          --if not self.csarUnits[unitName] then
+            --self.csarUnits[unitName] = unitName
+            _UnitList[unitName] = unitName
+          --end
       end -- end isAlive
     end -- end if _unit
   end -- end for
+  self.csarUnits = _UnitList
   
   -- build unit menus  
   for _, _unitName in pairs(self.csarUnits) do
@@ -1421,7 +1432,7 @@ end
 --- Populate table with available beacon frequencies.
 -- @param #CSAR self
 function CSAR:_GenerateVHFrequencies()
-  self:T(self.lid .. " _GenerateVHFrequencies")
+  self:I(self.lid .. " _GenerateVHFrequencies")
   local _skipFrequencies = self.SkipFrequencies
       
   local FreeVHFFrequencies = {}
@@ -1609,6 +1620,14 @@ function CSAR:onbeforeStatus(From, Event, To)
   -- housekeeping
   self:_AddMedevacMenuItem()
   self:_RefreshRadioBeacons()
+  for _,_sar in pairs (self.csarUnits) do
+    local PilotTable = self.downedPilots
+    for _,_entry in pairs (PilotTable) do
+      local entry = _entry -- #CSAR.DownedPilot
+      local name = entry.name
+      self:_CheckWoundedGroupStatus(_sar,name)
+    end
+  end
   return self
 end
 
