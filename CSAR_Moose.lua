@@ -982,7 +982,7 @@ function CSAR:_CheckCloseWoundedGroup(_distance, _heliUnit, _heliName, _woundedG
                   _time = self.landedStatus[_lookupKeyHeli] - 10
                   self.landedStatus[_lookupKeyHeli] = _time
               end
-              if _time <= 0 or _distance < 10 then
+              if _time <= 0 or _distance < self.loadDistance then
                  self.landedStatus[_lookupKeyHeli] = nil
                  self:_PickupUnit(_heliUnit, _pilotName, _woundedGroup, _woundedGroupName)
                  return false
