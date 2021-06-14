@@ -2,11 +2,11 @@
 --
 -- **Main Features:**
 --
---    * tbd
+--    * MOOSE based Helicopter CSAR Operations.
 --
 -- ===
 --
--- ### Author: **Applevangelist**
+-- ### Author: **Applevangelist** (Moose Version), ***Ciribob*** (original)
 -- @module Ops.CSAR
 -- @image OPS_CSAR.png
 
@@ -19,19 +19,103 @@
 -- @field #number coalition Coalition side number, e.g. `coalition.side.RED`.
 -- @extends Core.Fsm#FSM
 
---- Top of Documentatuion
+--- *Combat search and rescue (CSAR) are search and rescue operations that are carried out during war that are within or near combat zones.* (Wikipedia)
 --
 -- ===
 --
--- ![Banner Image](..\path\to\CSAR_Main.jpg)
+-- ![Banner Image](SAR_Main.jpg)
 --
 -- # The CSAR Concept
 -- 
 --  * Object oriented refactoring of Ciribob's fantastic CSAR script.
+--  * No need for extra MIST loading. 
+--  * Additional events to tailor your mission.
 -- 
--- # Basic Usage 
+-- ## 0. Prerequisites
+-- 
+-- You need to load an .ogg soundfile for the pilot's beacons into the mission, e.g. "beacon.ogg", use a once trigger, "sound to country" for that.
+-- Create a late activated single infantry unit as template in the mission editor and name it e.g. "Downed Pilot".
+-- 
+-- ## 1. Basic Setup
+-- 
+-- A basic setup example is the following:
+--        
+--        -- Instantiate and start a CSAR for the blue side, with template "Downed Pilot" and alias "Luftrettung"
+--        local BlueCsar = CSAR:New(coalition.side.BLUE,"Downed Pilot","Luftrettung")
+--        -- options
+--        BlueCsar.immortalcrew = true -- downed pilot spawn is immortal
+--        BlueCsar.invisiblevrew = false -- downed pilot spawn is visible
+--        -- start the FSM
+--        BlueCsar:__Start(5)
+-- 
+-- ## 2. Options
+-- 
+-- The following options are available (with their defaults):
 --
---  ## subheadline  
+--         self.allowDownedPilotCAcontrol = false -- Set to false if you don't want to allow control by Combined Arms.
+--         self.allowFARPRescue = true -- allows pilot to be rescued by landing at a FARP or Airbase. Else MASH only.
+--         self.autosmoke = false -- automatically smoke downed pilot location when a heli is near.
+--         self.coordtype = 1 -- Use Lat/Long DDM (0), Lat/Long DMS (1), MGRS (2), Bullseye imperial (3) or Bullseye metric (4) for coordinates.
+--         self.csarOncrash = true -- If set to true, will generate a downed pilot when a plane crashes as well.
+--         self.csarPrefix = { "helicargo", "MEDEVAC"} -- prefixes used for useprefix=true - DO NOT use # in helicopter names in the Mission Editor!
+--         self.enableForAI = true -- set to false to disable AI units from being rescued.
+--         self.extractDistance = 500 -- Distance the Downed pilot will run to the rescue helicopter.
+--         self.immortalcrew = true -- Set to true to make wounded crew immortal.
+--         self.invisiblecrew = false -- Set to true to make wounded crew insvisible.
+--         self.loadDistance = 75 -- configure distance for pilots to get into helicopter in meters.
+--         self.mashprefix = {"MASH"} -- prefixes of #GROUP objects used as MASHes.
+--         self.max_units = 6 -- number of pilots that can be carried if #CSAR.AircraftType is undefined.
+--         self.messageTime = 30 -- Time to show longer messages for in seconds.
+--         self.pilotRuntoExtractPoint = true -- Downed Pilot will run to the rescue helicopter up to self.extractDistance in meters. 
+--         self.radioSound = "beacon.ogg" -- the name of the sound file to use for the Pilot radio beacons. 
+--         self.smokecolor = 4 -- Color of smokemarker for blue side, 0 is green, 1 is red, 2 is white, 3 is orange and 4 is blue.
+--         self.template = Template or "generic" -- late activated template for downed pilot, usually single infantry soldier.
+--         self.useprefix = true  -- Use the Prefixed defined below, Requires Unit have the Prefix defined below. 
+-- 
+-- ## 3. Events
+--
+--  The class comes with a number of FSM-based events that missions designers can use to shape their mission.
+--  These are:
+--  
+-- ### 1. PilotDown. 
+--      
+--      The event is triggered when a new downed pilot is detected. Use e.g. `function my_csar:OnAfterPilotDown(...)` to link into this event:
+--      
+--          function my_csar:OnAfterPilotDown(from, event, to, spawnedgroup, frequency, groupname, coordinates_text)
+--            ... your code here ...
+--          end
+--    
+-- ### 2. Approach. 
+--      
+--      A CSAR helicpoter is closing in on a downed pilot. Use e.g. `function my_csar:OnAfterApproach(...)` to link into this event:
+--      
+--          function my_csar:OnAfterApproach(from, event, to, heliname, groupname)
+--            ... your code here ...
+--          end
+--    
+-- ### 3. Boarded. 
+--    
+--      The pilot has been boarded to the helicopter. Use e.g. `function my_csar:OnAfterBoarded(...)` to link into this event:
+--      
+--          function my_csar:OnAfterBoarded(from, event, to, heliname, groupname)
+--            ... your code here ...
+--          end
+--    
+-- ### 4. Returning. 
+--      
+--       The CSAR helicopter is ready to return to an Airbase, FARP or MASH. Use e.g. `function my_csar:OnAfterReturning(...)` to link into this event:
+--       
+--          function my_csar:OnAfterReturning(from, event, to, heliname, groupname)
+--            ... your code here ...
+--          end
+--    
+-- ### 5. Rescued. 
+--    
+--      The CSAR helicopter has landed close to an Airbase/MASH/FARP and the pilots are safe. Use e.g. `function my_csar:OnAfterRescued(...)` to link into this event:
+--      
+--          function my_csar:OnAfterRescued(from, event, to, heliunit, heliname)
+--            ... your code here ...
+--          end
 --  
 --
 -- @field #CSAR
@@ -94,25 +178,26 @@ CSAR.SkipFrequencies = {
   }
  
 --- All slot / Limit settings
--- @field #CSAR.aircraftType
-CSAR.aircraftType = {} -- Type and limit
-CSAR.aircraftType["SA342Mistral"] = 2
-CSAR.aircraftType["SA342Minigun"] = 2
-CSAR.aircraftType["SA342L"] = 4
-CSAR.aircraftType["SA342M"] = 4
-CSAR.aircraftType["UH-1H"] = 4
-CSAR.aircraftType["Mi-8MT"] = 8 
-CSAR.aircraftType["Mi-24"] = 8 
+-- @type CSAR.AircraftType
+-- @field #string typename Unit type name.
+CSAR.AircraftType = {} -- Type and limit
+CSAR.AircraftType["SA342Mistral"] = 2
+CSAR.AircraftType["SA342Minigun"] = 2
+CSAR.AircraftType["SA342L"] = 4
+CSAR.AircraftType["SA342M"] = 4
+CSAR.AircraftType["UH-1H"] = 4
+CSAR.AircraftType["Mi-8MT"] = 8 
+CSAR.AircraftType["Mi-24"] = 8 
 
 --- CSAR class version.
 -- @field #string version
-CSAR.version="0.0.1b22"
+CSAR.version="0.1.0r1"
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 -- ToDo list
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
--- TODO: Boarding
+-- TODO: Documentation
 -- WONTDO: Slot blocker etc
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -827,7 +912,7 @@ function CSAR:_CheckWoundedGroupStatus(heliname,woundedgroupname)
       self.heliVisibleMessage[_lookupKeyHeli] = nil
       --reschedule as units aren't dead yet , schedule for a bit slower though as we're far away
       _downedpilot.timestamp = timer.getAbsTime()
-      --self:__Approach(-10,heliname,woundedgroupname)
+      self:__Approach(-10,heliname,woundedgroupname)
     end
   else
   self:T("...Downed Pilot KIA?!")
@@ -874,7 +959,7 @@ function CSAR:_PickupUnit(_heliUnit, _pilotName, _woundedGroup, _woundedGroupNam
   end
   
   -- if the heli can't pick them up, show a message and return
-  local _maxUnits = self.aircraftType[_heliUnit:GetTypeName()]
+  local _maxUnits = self.AircraftType[_heliUnit:GetTypeName()]
   if _maxUnits == nil then
     _maxUnits = self.max_units
   end
@@ -997,7 +1082,7 @@ function CSAR:_CheckCloseWoundedGroup(_distance, _heliUnit, _heliName, _woundedG
       else
   
           local _unitsInHelicopter = self:_PilotsOnboard(_heliName)
-          local _maxUnits = self.aircraftType[_heliUnit:GetTypeName()]
+          local _maxUnits = self.AircraftType[_heliUnit:GetTypeName()]
           if _maxUnits == nil then
             _maxUnits = self.max_units
           end
@@ -1362,8 +1447,6 @@ function CSAR:_GetClosestMASH(_heli)
         local c=UTILS.VecSubstract(a,b)
         local dist=UTILS.VecNorm(c)
   
-        --env.info(string.format("Airbase %s dist=%d category=%d", DCSairbase:getName(), dist, DCSairbase:getCategory()))
-  
         if dist<distmin and (Category==nil or Category==DCSairbase:getDesc().category) then
           distmin=dist
           airbase=DCSairbase
@@ -1375,7 +1458,8 @@ function CSAR:_GetClosestMASH(_heli)
   
   if self.allowFARPRescue then
     local position = _heli:GetCoordinate()
-    local distance = GetCloseAirbase(position,self.coalition,nil)
+    local afb,distance = position:GetClosestAirbase2(nil,self.coalition)
+    --local distance = GetCloseAirbase(position,self.coalition,nil)
     _shortestDistance = distance
   end
   
@@ -1679,7 +1763,7 @@ function CSAR:onbeforeStatus(From, Event, To)
       local name = entry.name
       local timestamp = entry.timestamp or 0
       local now = timer.getAbsTime()
-      if now - timestamp > 90 then -- only check if we're not in approach mode
+      if now - timestamp > 17 then -- only check if we're not in approach mode, which is iterations of 5 and 10.
           self:_CheckWoundedGroupStatus(_sar,name)
       end
     end
@@ -1699,12 +1783,7 @@ function CSAR:onafterStatus(From, Event, To)
   for _, _unitName in pairs(self.csarUnits) do
     NumberOfSARPilots = NumberOfSARPilots + 1
   end
-  --[[
-  local PilotsInField = 0
-  for _, _unitName in pairs(self.woundedGroups) do
-    PilotsInField = PilotsInField + 1
-  end
-  --]]
+
   local PilotsInFieldN = 0
   for _, _unitName in pairs(self.downedPilots) do
     self:T({_unitName})
